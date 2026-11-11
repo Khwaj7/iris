@@ -1,0 +1,1028 @@
+/* ---- Stats view ----
+   A cinematic page: a full-bleed hero over a drifting wall of posters, then
+   rings, spotlights, poster rows and chart cards that animate in as they
+   scroll into view. Every motion is switched off under prefers-reduced-motion
+   (bottom of this file). All class names are prefixed sv- to stay clear of
+   App.css. */
+
+.sv {
+  --sv-ease: cubic-bezier(0.2, 0.75, 0.2, 1);
+  --sv-radius: 18px;
+  min-height: 100vh;
+  overflow-x: clip;
+}
+
+.sv-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.sv-muted {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.sv-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.sv-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ---- Hero ---- */
+
+.sv-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 360px;
+  display: flex;
+  align-items: flex-end;
+  background: #0d0c12;
+}
+
+/* A tilted, oversized grid of posters that drifts slowly upward. */
+.sv-hero-wall {
+  position: absolute;
+  inset: -40% -20%;
+  z-index: -2;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+  transform: rotate(-9deg);
+  animation: sv-drift 60s linear infinite alternate;
+}
+
+.sv-hero-wall img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  opacity: 0;
+  animation: sv-fade-in 1.2s var(--sv-ease) forwards;
+  animation-delay: calc(var(--i) * 45ms);
+}
+
+@keyframes sv-drift {
+  from {
+    transform: rotate(-9deg) translateY(0);
+  }
+  to {
+    transform: rotate(-9deg) translateY(-12%);
+  }
+}
+
+@keyframes sv-fade-in {
+  to {
+    opacity: 0.55;
+  }
+}
+
+/* Darkens the wall enough for white text in either theme, then melts into
+   the page background at the bottom edge. */
+.sv-hero-shade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 80% at 15% 100%, rgba(13, 12, 18, 0.9), transparent 70%),
+    linear-gradient(to bottom, rgba(13, 12, 18, 0.55) 0%, rgba(13, 12, 18, 0.8) 55%, var(--bg) 100%);
+}
+
+.sv-hero-content {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4.5rem;
+  color: #fff;
+  animation: sv-rise 0.9s var(--sv-ease) both;
+}
+
+@keyframes sv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+.sv-back {
+  display: inline-flex;
+  margin-bottom: 2.5rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.sv-back:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.sv-hero-content .sv-eyebrow {
+  color: #d9b8ff;
+}
+
+.sv-hero-title {
+  margin: 0.35rem 0 0.25rem;
+  color: #fff;
+  font-size: clamp(2.6rem, 9vw, 4.8rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.sv-hero-title span {
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  opacity: 0.85;
+}
+
+.sv-hero-sub {
+  margin: 0 0 1.5rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 1rem;
+}
+
+/* Segmented control with a thumb that slides to the selected option. */
+.sv-scope {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--count), minmax(0, 1fr));
+  width: min(100%, 420px);
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.sv-scope-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / var(--count));
+  border-radius: 10px;
+  background: var(--accent);
+  box-shadow: 0 6px 20px rgba(170, 59, 255, 0.45);
+  transform: translateX(calc(var(--index) * 100%));
+  transition: transform 0.45s var(--sv-ease);
+}
+
+.sv-scope button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.4rem;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 700;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.sv-scope button.active {
+  color: #fff;
+}
+
+.sv-scope-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+/* ---- Body ---- */
+
+.sv-body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1rem 5rem;
+}
+
+/* Scroll-triggered entrance, shared by every block. --delay staggers them. */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s var(--sv-ease) var(--delay, 0ms),
+    transform 0.7s var(--sv-ease) var(--delay, 0ms);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Rings ---- */
+
+.sv-rings {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: -2.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.sv-ring {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 1.1rem 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--sv-radius);
+  background: var(--card-bg);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+}
+
+.sv-ring svg {
+  width: clamp(84px, 22vw, 128px);
+  transform: rotate(-90deg);
+  grid-area: 1 / 1;
+}
+
+.sv-ring circle {
+  fill: none;
+  stroke-width: 8;
+}
+
+.sv-ring-track {
+  stroke: var(--accent-soft);
+}
+
+.sv-ring-arc {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.6s var(--sv-ease) 0.2s;
+  filter: drop-shadow(0 0 6px rgba(170, 59, 255, 0.45));
+}
+
+.sv-ring-center {
+  grid-area: 1 / 1;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.sv-ring-value {
+  color: var(--text-h);
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-ring-percent {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.sv-ring-label {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+/* ---- Spotlights (records) ---- */
+
+.sv-spots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 760px) {
+  .sv-spots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.sv-spot {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  height: 100%;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--sv-radius);
+  background: #15131c;
+  color: #fff;
+  text-align: left;
+  transition:
+    transform 0.35s var(--sv-ease),
+    box-shadow 0.35s var(--sv-ease);
+}
+
+.sv-spot:hover,
+.sv-spot:focus-visible {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* The poster itself, blown up and blurred into an ambient backdrop. */
+.sv-spot-backdrop {
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  filter: blur(22px) brightness(0.45) saturate(1.3);
+  transform: scale(1.1);
+  transition: transform 0.8s var(--sv-ease);
+}
+
+.sv-spot:hover .sv-spot-backdrop {
+  transform: scale(1.25);
+}
+
+.sv-spot-poster {
+  width: 72px;
+  height: 108px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+  transition: transform 0.35s var(--sv-ease);
+}
+
+.sv-spot:hover .sv-spot-poster {
+  transform: scale(1.06) rotate(-2deg);
+}
+
+.sv-spot-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.sv-spot .sv-eyebrow {
+  color: #d9b8ff;
+}
+
+.sv-spot-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sv-spot-detail {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+}
+
+.sv-poster-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  font-size: 1.6rem;
+}
+
+/* ---- Poster rows ---- */
+
+.sv-row {
+  margin-bottom: 1.75rem;
+}
+
+.sv-row-head h2,
+.sv-card-head h2 {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.sv-row-head p,
+.sv-card-head p {
+  margin: 0.1rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* App.css styles every <header> as a spaced flex row (the list's top bar);
+   these headers are a plain stacked title + subtitle. */
+.sv-row-head,
+.sv-card-head {
+  display: block;
+}
+
+.sv-row-head {
+  margin-bottom: 0.25rem;
+}
+
+.sv-row-frame {
+  position: relative;
+  margin: 0 -1rem;
+}
+
+.sv-row-track {
+  display: flex;
+  gap: 0.7rem;
+  list-style: none;
+  margin: 0;
+  /* Vertical room so a hovered poster can grow without being clipped. */
+  padding: 1rem 1rem 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 1rem;
+  scrollbar-width: none;
+}
+
+.sv-row-track::-webkit-scrollbar {
+  display: none;
+}
+
+.sv-row-track > li {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  opacity: 0;
+  transform: translateX(30px);
+  transition:
+    opacity 0.6s var(--sv-ease),
+    transform 0.6s var(--sv-ease);
+  transition-delay: calc(var(--i, 0) * 55ms + 150ms);
+}
+
+.sv-row.is-visible .sv-row-track > li {
+  opacity: 1;
+  transform: none;
+}
+
+.sv-poster {
+  position: relative;
+  display: block;
+  width: clamp(112px, 15vw, 150px);
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transition:
+    transform 0.35s var(--sv-ease),
+    box-shadow 0.35s var(--sv-ease);
+}
+
+.sv-poster img,
+.sv-poster .sv-poster-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sv-poster:hover,
+.sv-poster:focus-visible {
+  z-index: 1;
+  transform: scale(1.08) translateY(-4px);
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.45),
+    0 0 0 2px var(--accent);
+}
+
+/* Title over a bottom gradient, sliding up a touch on hover. */
+.sv-poster-caption {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 0.55rem 0.5rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+  color: #fff;
+  text-align: left;
+  transform: translateY(6px);
+  transition: transform 0.35s var(--sv-ease);
+}
+
+.sv-poster:hover .sv-poster-caption {
+  transform: none;
+}
+
+.sv-poster-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sv-poster-year {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.sv-row-more {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+/* Paging arrows: pointer devices only, shown when the row is hovered. */
+.sv-row-arrow {
+  position: absolute;
+  top: 1rem;
+  bottom: 1.25rem;
+  z-index: 2;
+  width: 3rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.sv-row-arrow.is-prev {
+  left: 0;
+  background: linear-gradient(to right, var(--bg) 10%, transparent);
+  color: var(--text-h);
+}
+
+.sv-row-arrow.is-next {
+  right: 0;
+  background: linear-gradient(to left, var(--bg) 10%, transparent);
+  color: var(--text-h);
+}
+
+@media (hover: hover) {
+  .sv-row-arrow {
+    display: flex;
+  }
+
+  .sv-row-frame:hover .sv-row-arrow,
+  .sv-row-arrow:focus-visible {
+    opacity: 1;
+  }
+}
+
+/* ---- Chart cards ---- */
+
+.sv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 760px) {
+  .sv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sv-card.is-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.sv-card {
+  min-width: 0;
+  padding: 1.2rem 1.25rem 1.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--sv-radius);
+  background: linear-gradient(
+    160deg,
+    var(--card-bg) 40%,
+    color-mix(in srgb, var(--card-bg), var(--accent) 6%)
+  );
+  transition:
+    opacity 0.7s var(--sv-ease) var(--delay, 0ms),
+    transform 0.7s var(--sv-ease) var(--delay, 0ms),
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+
+.sv-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+}
+
+.sv-card-head {
+  margin-bottom: 1rem;
+}
+
+.sv-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  list-style: none;
+  margin: -0.4rem 0 0.75rem;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.sv-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sv-you {
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.sv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: hsl(var(--hue) 55% 45%);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* -- Films / séries split -- */
+
+.sv-split-bar {
+  display: flex;
+  gap: 2px;
+  height: 16px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.1s var(--sv-ease) calc(var(--delay, 0ms) + 200ms);
+}
+
+.is-visible .sv-split-bar {
+  transform: none;
+}
+
+.sv-split-bar > span {
+  min-width: 4px;
+}
+
+.sv-split-bar > span:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.sv-split-bar > span:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.sv-split-bar > span:only-child {
+  border-radius: 4px;
+}
+
+.sv-split-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+}
+
+.sv-split-labels li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text);
+}
+
+.sv-split-labels strong {
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- Horizontal bars -- */
+
+.sv-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.sv-bars > li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sv-bar-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Big outlined rank numbers, the top three in the accent. */
+.sv-rank {
+  width: 2.6rem;
+  flex-shrink: 0;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--text-muted);
+  font-size: 1.9rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-bars > li:nth-child(-n + 3) .sv-rank {
+  -webkit-text-stroke-color: var(--accent);
+}
+
+.sv-bar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.sv-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  color: var(--text-h);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sv-bar-value {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-bar-track {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+  overflow: hidden;
+}
+
+.sv-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition:
+    transform 1s var(--sv-ease) calc(var(--delay, 0ms) + 250ms + var(--i, 0) * 70ms),
+    width 0.5s var(--sv-ease);
+}
+
+.is-visible .sv-bar-fill {
+  transform: none;
+}
+
+/* -- Column chart -- */
+
+.sv-columns-wrap {
+  position: relative;
+  padding-top: 0.9rem;
+}
+
+/* The one gridline: the scale's maximum, recessive. */
+.sv-columns-max {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-columns {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 4px;
+  border-top: 1px dashed var(--border);
+}
+
+.sv-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  cursor: default;
+}
+
+/* The whole column is the hit target, not just the mark. */
+.sv-col-plot {
+  display: flex;
+  align-items: flex-end;
+  height: 170px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  transition: background 0.2s;
+}
+
+.sv-col:hover .sv-col-plot,
+.sv-col:focus .sv-col-plot {
+  background: var(--accent-soft);
+}
+
+.sv-col-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  width: min(100%, 40px);
+  margin: 0 auto;
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition:
+    transform 0.9s var(--sv-ease) calc(var(--delay, 0ms) + 200ms + var(--i, 0) * 60ms),
+    height 0.5s var(--sv-ease);
+}
+
+.is-visible .sv-col-stack {
+  transform: none;
+}
+
+.sv-col-stack > span {
+  min-height: 2px;
+  transition: flex-grow 0.5s var(--sv-ease);
+}
+
+.sv-col-stack > span:last-child {
+  border-radius: 4px 4px 0 0;
+}
+
+.sv-col:hover .sv-col-stack > span {
+  filter: brightness(1.15);
+}
+
+.sv-col-label {
+  margin-top: 0.35rem;
+  min-height: 1.1em;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .sv-col-label.is-minor {
+    visibility: hidden;
+  }
+}
+
+/* Tooltip: hover with a pointer, tap or keyboard focus otherwise. */
+.sv-col::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% - 0.5rem);
+  left: 50%;
+  z-index: 2;
+  min-width: max-content;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  background: var(--text-h);
+  color: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: pre;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  transition:
+    opacity 0.15s,
+    transform 0.2s var(--sv-ease);
+}
+
+.sv-col.is-start::after {
+  left: 0;
+  transform: translateY(6px);
+}
+
+.sv-col.is-end::after {
+  left: auto;
+  right: 0;
+  transform: translateY(6px);
+}
+
+.sv-col:hover::after,
+.sv-col:focus::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.sv-col.is-start:hover::after,
+.sv-col.is-start:focus::after,
+.sv-col.is-end:hover::after,
+.sv-col.is-end:focus::after {
+  transform: none;
+}
+
+/* ---- Phones ---- */
+
+@media (max-width: 560px) {
+  .sv-hero {
+    min-height: 330px;
+  }
+
+  .sv-hero-wall {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .sv-back {
+    margin-bottom: 1.75rem;
+  }
+
+  .sv-rings {
+    gap: 0.5rem;
+  }
+
+  .sv-ring {
+    padding: 0.85rem 0.25rem 0.8rem;
+  }
+
+  .sv-ring-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+  }
+
+  .sv-card {
+    padding: 1rem;
+  }
+}
+
+/* ---- Reduced motion: everything in place, nothing moves ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .sv *,
+  .sv *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .sv-hero-wall img {
+    opacity: 0.55;
+  }
+
+  .reveal,
+  .sv-row-track > li,
+  .sv-bar-fill,
+  .sv-col-stack,
+  .sv-split-bar {
+    opacity: 1;
+    transform: none;
+  }
+}

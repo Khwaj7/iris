@@ -24,6 +24,7 @@ type Theme = { name: string; color: string }
 import type { MediaSearchResult } from './lib/tmdb'
 import MediaBadge from './MediaBadge'
 import MediaDetail from './MediaDetail'
+import StatsView from './StatsView'
 import './App.css'
 
 type Tab = 'toWatch' | 'seen'
@@ -659,6 +660,9 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The stats page. A selected title still wins over it, so opening one from
+  // the stats and coming back lands on the stats again.
+  const [showStats, setShowStats] = useState(false)
   // Both filters are multi-select; an empty set means "no filter".
   const [categoryFilters, setCategoryFilters] = useState<ReadonlySet<string>>(
     new Set()
@@ -1005,6 +1009,22 @@ function App() {
     )
   }
 
+  if (showStats) {
+    return (
+      <>
+        {noticeStack}
+        <StatsView
+          media={media}
+          seenBy={seenBy}
+          profiles={profiles}
+          username={username}
+          onBack={() => setShowStats(false)}
+          onOpen={setSelectedId}
+        />
+      </>
+    )
+  }
+
   const pickerItem = media.find((m) => m.id === seenPickerId)
 
   // The tabs are personal: a title is "seen" only if MY profile has seen it,
@@ -1098,6 +1118,16 @@ function App() {
       <header>
         <h1>👁️ Iris</h1>
         <div className="header-controls">
+          <button
+            className="stats-entry"
+            onClick={() => {
+              window.scrollTo(0, 0)
+              setShowStats(true)
+            }}
+            title="Voir les statistiques"
+          >
+            📊 Stats
+          </button>
           <button
             className="username"
             onClick={() => setUsername('')}

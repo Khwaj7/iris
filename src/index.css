@@ -11,6 +11,10 @@
   --success-soft: rgba(22, 163, 74, 0.12);
   --danger-bg: #fef2f2;
   --danger-text: #b91c1c;
+  /* Chart series for films vs séries — a colour-blind-safe pair, checked in
+     both themes (the dark accent is too light to serve as a series colour). */
+  --series-movie: #aa3bff;
+  --series-tv: #eb6834;
 
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light dark;
@@ -33,6 +37,8 @@
     --success-soft: rgba(74, 222, 128, 0.14);
     --danger-bg: #3b1d1d;
     --danger-text: #fca5a5;
+    --series-movie: #a463f2;
+    --series-tv: #d95926;
   }
 }
 

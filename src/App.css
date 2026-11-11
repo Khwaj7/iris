@@ -1123,3 +1123,19 @@ div.cast-photo {
 .changelog-changes li {
   margin-bottom: 0.2rem;
 }
+
+/* ---- Stats entry button (list header) ---- */
+
+.stats-entry {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.stats-entry:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
