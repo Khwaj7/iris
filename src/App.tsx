@@ -25,6 +25,8 @@ import type { MediaSearchResult } from './lib/tmdb'
 import MediaBadge from './MediaBadge'
 import MediaDetail from './MediaDetail'
 import StatsView from './StatsView'
+import AdminView from './AdminView'
+import type { ProfileChange } from './AdminView'
 import { CinemaHero, Counter, Reveal, Segmented } from './cinema'
 import { posterWall, useInView } from './motion'
 import './App.css'
@@ -35,7 +37,14 @@ const USERNAME_STORAGE_KEY = 'iris-username'
 const GENRES_STORAGE_KEY = 'iris-genres-v2'
 const SWIPE_HINT_KEY = 'iris-swipe-hint-seen'
 
-function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
+function NamePrompt({
+  notice,
+  onSubmit,
+}: {
+  // Shown above the form, e.g. when this device's profile was deleted.
+  notice?: string
+  onSubmit: (name: string) => void
+}) {
   const [name, setName] = useState('')
 
   function handleSubmit(e: FormEvent) {
@@ -47,6 +56,7 @@ function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
   return (
     <div className="name-prompt">
       <h1>👁️ Iris</h1>
+      {notice && <p className="name-prompt-notice">{notice}</p>}
       <p>Choisis ton prénom pour commencer :</p>
       <form onSubmit={handleSubmit}>
         <input
@@ -709,12 +719,16 @@ function App() {
   // The stats page. A selected title still wins over it, so opening one from
   // the stats and coming back lands on the stats again.
   const [showStats, setShowStats] = useState(false)
+  const [showAdmin, setShowAdmin] = useState(false)
   // Both filters are multi-select; an empty set means "no filter".
   const [categoryFilters, setCategoryFilters] = useState<ReadonlySet<string>>(
     new Set()
   )
   const [addedByFilters, setAddedByFilters] = useState<ReadonlySet<string>>(new Set())
   const [profiles, setProfiles] = useState<string[]>([])
+  // Whether `profiles` reflects the database yet: until it does, a username
+  // missing from it proves nothing (see `profileRemoved` below).
+  const [profilesLoaded, setProfilesLoaded] = useState(false)
   // media row id -> names of the profiles that have seen it
   const [seenBy, setSeenBy] = useState<Record<string, string[]>>({})
   const [seenPickerId, setSeenPickerId] = useState<string | null>(null)
@@ -825,7 +839,9 @@ function App() {
     })
   }
 
-  useEffect(() => {
+  // Loads all three tables from scratch: once on start, and again after an
+  // admin operation, whose many writes are simpler to re-read than to replay.
+  function loadAll() {
     supabase
       .from('media')
       .select('*')
@@ -841,7 +857,10 @@ function App() {
       .select('name')
       .then(({ data, error }) => {
         if (error) setError(`Chargement des profils impossible : ${error.message}`)
-        else setProfiles(sortedProfiles(data.map((p) => p.name as string)))
+        else {
+          setProfiles(sortedProfiles(data.map((p) => p.name as string)))
+          setProfilesLoaded(true)
+        }
       })
 
     supabase
@@ -858,6 +877,10 @@ function App() {
         }
         setSeenBy(map)
       })
+  }
+
+  useEffect(() => {
+    loadAll()
 
     const channel = supabase
       .channel('media-changes')
@@ -867,6 +890,10 @@ function App() {
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             upsertMedia(payload.new as Media)
+          } else if (payload.eventType === 'DELETE') {
+            // A DELETE payload carries only the primary key.
+            const { id } = payload.old as { id: string }
+            setMedia((current) => current.filter((m) => m.id !== id))
           }
         }
       )
@@ -878,6 +905,16 @@ function App() {
           setProfiles((current) =>
             current.includes(name) ? current : sortedProfiles([...current, name])
           )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'profiles' },
+        (payload) => {
+          // Removed from the admin panel. If it is this device's profile,
+          // `profileRemoved` sends it back to the name prompt.
+          const { name } = payload.old as { name: string }
+          setProfiles((current) => current.filter((p) => p !== name))
         }
       )
       .on(
@@ -939,23 +976,6 @@ function App() {
     return () => clearTimeout(timer)
   }, [highlight])
 
-  // Register the current profile so it shows up in everyone's "seen by" picker.
-  useEffect(() => {
-    if (!username) return
-    supabase
-      .from('profiles')
-      .upsert({ name: username }, { ignoreDuplicates: true })
-      .then(({ error }) => {
-        if (!error) {
-          setProfiles((current) =>
-            current.includes(username)
-              ? current
-              : sortedProfiles([...current, username])
-          )
-        }
-      })
-  }, [username])
-
   async function saveSeen(item: Media, selected: string[]) {
     setSeenPickerId(null)
     const before = seenBy[item.id] ?? []
@@ -1016,13 +1036,54 @@ function App() {
     return [{ name: item.category ?? 'Autre', color: categoryColor(item.category) }]
   }
 
+  // Register the profile only when a name is typed in, never on start-up:
+  // otherwise a profile deleted from the admin panel would quietly come back
+  // the next time its owner opened the app. Added to local state first, so
+  // `profileRemoved` never mistakes a brand-new name for a deleted one.
   function chooseUsername(name: string) {
     localStorage.setItem(USERNAME_STORAGE_KEY, name)
     setUsername(name)
+    setProfiles((current) =>
+      current.includes(name) ? current : sortedProfiles([...current, name])
+    )
+    supabase
+      .from('profiles')
+      .upsert({ name }, { ignoreDuplicates: true })
+      .then(({ error }) => {
+        if (error) setError(`Enregistrement du profil impossible : ${error.message}`)
+      })
   }
 
-  if (!username) {
-    return <NamePrompt onSubmit={chooseUsername} />
+  // After an admin operation: re-read everything, and if it touched this
+  // device's own profile, follow it (a merge) or let `profileRemoved` act.
+  function handleProfileChange(change: ProfileChange) {
+    if (change.name === username && change.mode === 'merge' && change.into) {
+      localStorage.setItem(USERNAME_STORAGE_KEY, change.into)
+      setUsername(change.into)
+    }
+    loadAll()
+    pushNotice(
+      change.mode === 'merge'
+        ? `« ${change.name} » fusionné dans « ${change.into} »`
+        : `Profil « ${change.name} » supprimé`
+    )
+  }
+
+  // This device's stored name no longer has a profile: it was deleted from the
+  // admin panel. Back to the name prompt rather than silently re-creating it.
+  const profileRemoved = profilesLoaded && !!username && !profiles.includes(username)
+
+  if (!username || profileRemoved) {
+    return (
+      <NamePrompt
+        notice={
+          profileRemoved
+            ? `Le profil « ${username} » a été supprimé. Choisis un prénom pour continuer.`
+            : undefined
+        }
+        onSubmit={chooseUsername}
+      />
+    )
   }
 
   // Reading the selected row from the list keeps the detail page in sync
@@ -1050,6 +1111,22 @@ function App() {
           item={selectedItem}
           seenBy={seenBy[selectedItem.id] ?? []}
           onBack={() => setSelectedId(null)}
+        />
+      </>
+    )
+  }
+
+  if (showAdmin) {
+    return (
+      <>
+        {noticeStack}
+        <AdminView
+          media={media}
+          seenBy={seenBy}
+          profiles={profiles}
+          username={username}
+          onBack={() => setShowAdmin(false)}
+          onChanged={handleProfileChange}
         />
       </>
     )
@@ -1312,6 +1389,16 @@ function App() {
             </Reveal>
           ))
         )}
+
+        <button
+          className="adm-entry"
+          onClick={() => {
+            window.scrollTo(0, 0)
+            setShowAdmin(true)
+          }}
+        >
+          ⚙️ Administration
+        </button>
       </div>
 
       {pickerItem && (

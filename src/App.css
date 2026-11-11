@@ -1243,3 +1243,29 @@ div.cast-photo {
 .changelog-changes li {
   margin-bottom: 0.2rem;
 }
+
+/* ---- Admin entry, at the bottom of the list ---- */
+
+.adm-entry {
+  display: block;
+  margin: 1rem auto 0;
+  padding: 0.4rem 0.9rem;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.adm-entry:hover {
+  color: var(--accent);
+}
+
+.name-prompt-notice {
+  max-width: 420px;
+  margin: 1rem auto 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}

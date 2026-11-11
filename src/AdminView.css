@@ -1,0 +1,421 @@
+/* ---- Admin panel ----
+   Same cinema hero as the list and the stats (cinema.css), then one card per
+   profile; "Gérer" opens a modal built on the shared .modal styles. */
+
+.adm {
+  min-height: 100vh;
+  overflow-x: clip;
+}
+
+.adm-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 2.25rem;
+  /* Clear the fixed version badge, as on the list. */
+  padding-right: max(0px, calc(3.5rem - max(0px, (100vw - 960px) / 2)));
+}
+
+.adm-title {
+  font-size: clamp(2.4rem, 8vw, 4rem);
+}
+
+/* ---- Lock ---- */
+
+.adm-lock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 420px;
+}
+
+.adm-lock input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  color: #fff;
+}
+
+.adm-lock input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.adm-lock input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(170, 59, 255, 0.35);
+}
+
+.adm-lock .cine-pill {
+  border-radius: 14px;
+  padding: 0.7rem 1.1rem;
+}
+
+.adm-lock .cine-pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adm-lock.is-wrong input {
+  border-color: #f87171;
+  animation: adm-shake 0.35s;
+}
+
+@keyframes adm-shake {
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.adm-lock-error {
+  width: 100%;
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.adm-lock-note {
+  max-width: 480px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.adm-lock-note code {
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---- Profile cards ---- */
+
+.adm-body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
+
+.adm-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.7rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 760px) {
+  .adm-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.adm-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  height: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card-bg);
+}
+
+@media (hover: hover) {
+  .adm-card {
+    transition:
+      opacity 0.7s var(--cine-ease) var(--delay, 0ms),
+      transform 0.7s var(--cine-ease) var(--delay, 0ms),
+      border-color 0.3s,
+      box-shadow 0.3s;
+  }
+
+  .adm-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.adm-card .cine-avatar,
+.adm-modal-head .cine-avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 1.1rem;
+}
+
+.adm-card-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.adm-card-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.adm-card-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.adm-chip {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.adm-chip.is-you {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.adm-chip.is-twin {
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  color: #b45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  .adm-chip.is-twin {
+    color: #fbbf24;
+  }
+}
+
+.adm-manage {
+  flex-shrink: 0;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 0.88rem;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.adm-manage:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Manage modal ---- */
+
+.adm-modal {
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: adm-pop 0.25s var(--cine-ease);
+}
+
+@keyframes adm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
+.adm-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.adm-modal-head .modal-subtitle {
+  margin: 0.1rem 0 0;
+}
+
+/* The profile's most recent additions, inside the "Supprimer le profil et
+   ses vus" option once it is selected: the titles that will stay behind. */
+.adm-recent {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.adm-recent-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.adm-recent ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.adm-recent li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.adm-recent img,
+.adm-recent-poster {
+  width: 26px;
+  height: 39px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.adm-recent-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.adm-recent-date {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.adm-recent-more {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.adm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.adm-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.adm-option input {
+  margin: 0.2rem 0 0;
+  accent-color: var(--accent);
+}
+
+.adm-option.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.adm-option.is-danger.is-selected {
+  border-color: var(--danger-text);
+  background: var(--danger-bg);
+}
+
+.adm-option.is-danger input {
+  accent-color: var(--danger-text);
+}
+
+.adm-option.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adm-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.adm-option-title {
+  color: var(--text-h);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.adm-option-detail {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.adm-select {
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.adm-warning,
+.adm-failure {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.adm-warning {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.adm-failure {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+/* A fixed red rather than --danger-text, which is a pale pink in dark mode
+   and would leave white text unreadable. */
+.modal-save.adm-danger {
+  background: #dc2626;
+}
+
+.modal-save:disabled,
+.modal-cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-lock.is-wrong input,
+  .adm-modal {
+    animation: none;
+  }
+}

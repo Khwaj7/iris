@@ -8,9 +8,10 @@ There is no test suite or test runner configured.
 
 ## Environment
 
-Requires a `.env.local` with three Vite-exposed variables (all client-side, prefixed `VITE_`):
+Requires a `.env.local` with four Vite-exposed variables (all client-side, prefixed `VITE_`):
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — consumed in `src/lib/supabase.ts`; the module throws on import if either is missing.
-- `VITE_TMDB_API_KEY` — consumed in `src/lib/tmdb.ts`; TMDB calls throw at call time if unset.
+- `VITE_TMDB_API_KEY` — the short v3 key (32 hex chars, sent as `api_key`), not the long "Read Access Token"; consumed in `src/lib/tmdb.ts`; TMDB calls throw at call time if unset.
+- `VITE_ADMIN_CODE` — unlocks the admin panel (`src/lib/admin.ts`); the panel says so if unset. Shipped in the client bundle like every `VITE_` value, so it deters, it doesn't secure.
 
 ## Architecture
 
@@ -24,9 +25,11 @@ Iris is a shared watchlist of films **and series** ("À voir" / "Vus") backed by
 
 **State & realtime.** `App` is the single source of truth: it loads all rows once, then subscribes to a Supabase `postgres_changes` channel and merges INSERT/UPDATE events via `upsertMedia`. Writes are optimistic — local state updates first, then the Supabase call; on error the previous value is restored (see `saveSeen`). Because our own writes echo back over the realtime channel, `upsertMedia` dedupes by `id`. **Renaming a realtime table name or a payload column fails silently** — a listener on a table that doesn't exist simply never fires, and a missed `payload.old.media_id` makes un-marking stop propagating with no error anywhere. `grep` after any such rename.
 
-**Navigation is state, not routes.** `App` conditionally renders one of three views from local state: `NamePrompt` (no username), `MovieDetail` (a `selectedId` is set), or the list. The detail view reads its movie out of the live `movies` array by id so realtime updates stay in sync.
+**Navigation is state, not routes.** `App` conditionally renders one view from local state, in this order: `NamePrompt` (no username, or its profile was deleted), `MediaDetail` (a `selectedId` is set), `AdminView`, `StatsView`, or the list. The list, stats and admin share the "cinema" look from `src/cinema.tsx` / `cinema.css` (hero, segmented control, `Reveal`), with its hooks in `src/motion.ts`. The detail view reads its movie out of the live `movies` array by id so realtime updates stay in sync.
 
-**Identity.** No auth. A username is picked once via `NamePrompt` and persisted in `localStorage` under `iris-username`; it is stored on each row as `added_by`.
+**Identity.** No auth. A username is picked once via `NamePrompt` and persisted in `localStorage` under `iris-username`; it is stored on each row as `added_by`. The `profiles` row is written **only** when a name is typed in (`chooseUsername`), never on start-up: a stored name whose profile no longer exists means it was deleted from the admin panel, and `App` sends that device back to `NamePrompt` (`profileRemoved`) instead of re-creating it.
+
+**Admin panel.** `AdminView` (behind `VITE_ADMIN_CODE`) merges a profile into another or deletes it — with its `seen` rows, and optionally the titles it added. The operations live in `src/lib/admin.ts`; with no transactions over REST they are ordered dependants-first (`seen`, then `media`, then `profiles`), and afterwards `App` re-reads all three tables (`loadAll`).
 
 **TMDB layer (`src/lib/tmdb.ts`).** Wraps the TMDB v3 REST API, always requesting `language=fr-FR`. Key conventions:
 - Everything is **normalised at the boundary**: films carry `title`/`release_date` and series `name`/`first_air_date`, so `searchMedia`/`getMediaDetails` return `MediaSearchResult`/`MediaDetails` and nothing upstream ever narrows between the two shapes.
