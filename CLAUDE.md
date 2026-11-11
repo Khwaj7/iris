@@ -13,6 +13,8 @@ Requires a `.env.local` with four Vite-exposed variables (all client-side, prefi
 - `VITE_TMDB_API_KEY` — the short v3 key (32 hex chars, sent as `api_key`), not the long "Read Access Token"; consumed in `src/lib/tmdb.ts`; TMDB calls throw at call time if unset.
 - `VITE_ADMIN_CODE` — unlocks the admin panel (`src/lib/admin.ts`); the panel says so if unset. Shipped in the client bundle like every `VITE_` value, so it deters, it doesn't secure.
 
+**Deployment.** Production is on Vercel, built from `master` through its GitHub integration (no config in the repo). `.env.local` never reaches it: **every new `VITE_` variable must also be added in Vercel** (project → Settings → Environment Variables), followed by a redeploy, since Vite inlines these values at build time.
+
 ## Architecture
 
 Iris is a shared watchlist of films **and series** ("À voir" / "Vus") backed by Supabase, enriched with metadata from TMDB. There is no router and no backend of its own — `src/lib` holds the only integration boundaries.
