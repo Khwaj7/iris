@@ -1,6 +1,6 @@
 // Displayed by <VersionBadge />. Newest version first; APP_VERSION is the
 // badge shown top-right and should match CHANGELOG[0].version.
-export const APP_VERSION = '6.0'
+export const APP_VERSION = '7.0'
 
 export type ChangelogEntry = {
   version: string
@@ -10,6 +10,21 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '7.0',
+    title: 'Ciné & statistiques',
+    date: '2026-11-12',
+    changes: [
+      'Nouvelle page 📊 Stats : genres, décennies, activité, qui a vu et ajouté quoi, records',
+      'Titres vus par tout le monde, et ceux que personne n’a encore vus',
+      'Nouveau look ciné : mur d’affiches, compteurs animés, apparitions au défilement',
+      'Recherche en verre dépoli, dont les résultats passent par-dessus la liste',
+      'Cartes sur deux colonnes sur ordinateur, avec une affiche plus grande',
+      'Panel ⚙️ Administration (avec code) : fusionner les doublons ou supprimer un profil',
+      'Dernière connexion de chaque profil, visible dans le panel admin',
+      'Un profil supprimé revient à l’écran prénom au prochain lancement',
+    ],
+  },
   {
     version: '6.0',
     title: 'Films & séries',

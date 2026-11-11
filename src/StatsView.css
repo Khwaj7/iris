@@ -3,21 +3,13 @@
    rings, spotlights, poster rows and chart cards that animate in as they
    scroll into view. Every motion is switched off under prefers-reduced-motion
    (bottom of this file). All class names are prefixed sv- to stay clear of
-   App.css. */
+   App.css; the hero, segmented control and .reveal come from cinema.css. */
 
 .sv {
-  --sv-ease: cubic-bezier(0.2, 0.75, 0.2, 1);
+  --sv-ease: var(--cine-ease);
   --sv-radius: 18px;
   min-height: 100vh;
   overflow-x: clip;
-}
-
-.sv-eyebrow {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
 }
 
 .sv-muted {
@@ -39,177 +31,9 @@
   flex-shrink: 0;
 }
 
-/* ---- Hero ---- */
-
-.sv-hero {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  min-height: 360px;
-  display: flex;
-  align-items: flex-end;
-  background: #0d0c12;
-}
-
-/* A tilted, oversized grid of posters that drifts slowly upward. */
-.sv-hero-wall {
-  position: absolute;
-  inset: -40% -20%;
-  z-index: -2;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 10px;
-  transform: rotate(-9deg);
-  animation: sv-drift 60s linear infinite alternate;
-}
-
-.sv-hero-wall img {
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  object-fit: cover;
-  border-radius: 8px;
-  opacity: 0;
-  animation: sv-fade-in 1.2s var(--sv-ease) forwards;
-  animation-delay: calc(var(--i) * 45ms);
-}
-
-@keyframes sv-drift {
-  from {
-    transform: rotate(-9deg) translateY(0);
-  }
-  to {
-    transform: rotate(-9deg) translateY(-12%);
-  }
-}
-
-@keyframes sv-fade-in {
-  to {
-    opacity: 0.55;
-  }
-}
-
-/* Darkens the wall enough for white text in either theme, then melts into
-   the page background at the bottom edge. */
-.sv-hero-shade {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(120% 80% at 15% 100%, rgba(13, 12, 18, 0.9), transparent 70%),
-    linear-gradient(to bottom, rgba(13, 12, 18, 0.55) 0%, rgba(13, 12, 18, 0.8) 55%, var(--bg) 100%);
-}
-
-.sv-hero-content {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 1.25rem 1rem 4.5rem;
-  color: #fff;
-  animation: sv-rise 0.9s var(--sv-ease) both;
-}
-
-@keyframes sv-rise {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-}
-
+/* Back button: a .cine-pill with room below it. */
 .sv-back {
-  display: inline-flex;
   margin-bottom: 2.5rem;
-  padding: 0.4rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: background 0.2s;
-}
-
-.sv-back:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.sv-hero-content .sv-eyebrow {
-  color: #d9b8ff;
-}
-
-.sv-hero-title {
-  margin: 0.35rem 0 0.25rem;
-  color: #fff;
-  font-size: clamp(2.6rem, 9vw, 4.8rem);
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-}
-
-.sv-hero-title span {
-  font-weight: 300;
-  letter-spacing: -0.01em;
-  opacity: 0.85;
-}
-
-.sv-hero-sub {
-  margin: 0 0 1.5rem;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 1rem;
-}
-
-/* Segmented control with a thumb that slides to the selected option. */
-.sv-scope {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(var(--count), minmax(0, 1fr));
-  width: min(100%, 420px);
-  padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
-}
-
-.sv-scope-thumb {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc((100% - 8px) / var(--count));
-  border-radius: 10px;
-  background: var(--accent);
-  box-shadow: 0 6px 20px rgba(170, 59, 255, 0.45);
-  transform: translateX(calc(var(--index) * 100%));
-  transition: transform 0.45s var(--sv-ease);
-}
-
-.sv-scope button {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.55rem 0.4rem;
-  border: none;
-  background: none;
-  color: rgba(255, 255, 255, 0.75);
-  font-weight: 700;
-  font-size: 0.92rem;
-  white-space: nowrap;
-  transition: color 0.3s;
-}
-
-.sv-scope button.active {
-  color: #fff;
-}
-
-.sv-scope-count {
-  font-size: 0.75rem;
-  font-weight: 600;
-  opacity: 0.75;
 }
 
 /* ---- Body ---- */
@@ -218,20 +42,6 @@
   max-width: 1100px;
   margin: 0 auto;
   padding: 0 1rem 5rem;
-}
-
-/* Scroll-triggered entrance, shared by every block. --delay staggers them. */
-.reveal {
-  opacity: 0;
-  transform: translateY(28px);
-  transition:
-    opacity 0.7s var(--sv-ease) var(--delay, 0ms),
-    transform 0.7s var(--sv-ease) var(--delay, 0ms);
-}
-
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
 }
 
 /* ---- Rings ---- */
@@ -390,7 +200,7 @@
   min-width: 0;
 }
 
-.sv-spot .sv-eyebrow {
+.sv-spot .cine-eyebrow {
   color: #d9b8ff;
 }
 
@@ -672,20 +482,6 @@
   color: var(--accent);
   font-size: 0.7rem;
   font-weight: 700;
-}
-
-.sv-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: hsl(var(--hue) 55% 45%);
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 800;
 }
 
 /* -- Films / séries split -- */
@@ -974,14 +770,6 @@
 /* ---- Phones ---- */
 
 @media (max-width: 560px) {
-  .sv-hero {
-    min-height: 330px;
-  }
-
-  .sv-hero-wall {
-    grid-template-columns: repeat(5, 1fr);
-  }
-
   .sv-back {
     margin-bottom: 1.75rem;
   }
@@ -1011,10 +799,6 @@
   .sv *::after {
     animation: none !important;
     transition: none !important;
-  }
-
-  .sv-hero-wall img {
-    opacity: 0.55;
   }
 
   .reveal,

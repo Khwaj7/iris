@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent, TouchEvent } from 'react'
+import type { CSSProperties, FormEvent, ReactNode, TouchEvent } from 'react'
 import { supabase } from './lib/supabase'
 import type { Media } from './lib/supabase'
 import type { MediaType } from './lib/media'
@@ -25,6 +25,11 @@ import type { MediaSearchResult } from './lib/tmdb'
 import MediaBadge from './MediaBadge'
 import MediaDetail from './MediaDetail'
 import StatsView from './StatsView'
+import AdminView from './AdminView'
+import type { ProfileChange } from './AdminView'
+import { recordVisit } from './lib/profiles'
+import { CinemaHero, Counter, Reveal, Segmented } from './cinema'
+import { posterWall, useInView } from './motion'
 import './App.css'
 
 type Tab = 'toWatch' | 'seen'
@@ -32,8 +37,18 @@ type Tab = 'toWatch' | 'seen'
 const USERNAME_STORAGE_KEY = 'iris-username'
 const GENRES_STORAGE_KEY = 'iris-genres-v2'
 const SWIPE_HINT_KEY = 'iris-swipe-hint-seen'
+// "Last connection" is stamped on opening the app, and again on coming back to
+// it once this long has passed — not on every tab switch.
+const VISIT_GAP_MS = 30 * 60 * 1000
 
-function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
+function NamePrompt({
+  notice,
+  onSubmit,
+}: {
+  // Shown above the form, e.g. when this device's profile was deleted.
+  notice?: string
+  onSubmit: (name: string) => void
+}) {
   const [name, setName] = useState('')
 
   function handleSubmit(e: FormEvent) {
@@ -45,6 +60,7 @@ function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
   return (
     <div className="name-prompt">
       <h1>👁️ Iris</h1>
+      {notice && <p className="name-prompt-notice">{notice}</p>}
       <p>Choisis ton prénom pour commencer :</p>
       <form onSubmit={handleSubmit}>
         <input
@@ -378,6 +394,7 @@ const cardAnchorId = (mediaId: string) => `media-${mediaId}`
 
 function MediaCard({
   item,
+  index,
   seen,
   themes,
   hint,
@@ -386,6 +403,8 @@ function MediaCard({
   onOpen,
 }: {
   item: Media
+  // Position in its section, to stagger the entrance animation.
+  index: number
   seen: boolean
   themes: Theme[]
   hint?: boolean
@@ -426,10 +445,12 @@ function MediaCard({
     setDragX(0)
   }
 
-  const cardStyle: CSSProperties = {
+  const cardStyle = {
     transform: dragX ? `translateX(${dragX}px)` : undefined,
     transition: dragX ? 'none' : 'transform 0.2s ease',
-  }
+    // Blurred into a faint ambient tint behind the card (see .media-card::before).
+    '--poster': item.thumbnail_url ? `url("${item.thumbnail_url}")` : 'none',
+  } as CSSProperties
 
   const cardClass = ['media-card', hint && 'swipe-hint', highlight && 'is-highlighted']
     .filter(Boolean)
@@ -437,7 +458,11 @@ function MediaCard({
 
   return (
     // The id is the scroll anchor used when a search hit is already in the list.
-    <li className="media-card-wrap" id={cardAnchorId(item.id)}>
+    <li
+      className="media-card-wrap"
+      id={cardAnchorId(item.id)}
+      style={{ '--i': Math.min(index, 8) } as CSSProperties}
+    >
       <div className="swipe-reveal">{seenLabel(item)}</div>
       <div
         className={cardClass}
@@ -648,6 +673,41 @@ function FilterSelect({
   )
 }
 
+// The list's header: the poster wall of the current list, the brand and
+// account buttons, a big count of what's in the current tab, the search and
+// the films / séries switch. Its own component so the count-up hook only
+// mounts with the list view.
+function ListHero({
+  posters,
+  count,
+  noun,
+  sub,
+  top,
+  children,
+}: {
+  posters: Media[]
+  count: number
+  noun: string
+  sub: string
+  // Above the headline (the top bar); children go below it.
+  top: ReactNode
+  children: ReactNode
+}) {
+  const [heroRef, heroVisible] = useInView<HTMLDivElement>()
+  return (
+    <CinemaHero posters={posters} heroRef={heroRef} width={LIST_WIDTH}>
+      {top}
+      <h1 className="cine-hero-title list-hero-title">
+        <Counter value={count} active={heroVisible} /> <span>{noun}</span>
+      </h1>
+      <p className="cine-hero-sub">{sub}</p>
+      {children}
+    </CinemaHero>
+  )
+}
+
+const LIST_WIDTH = '960px'
+
 function App() {
   const [username, setUsername] = useState(
     () => localStorage.getItem(USERNAME_STORAGE_KEY) ?? ''
@@ -663,12 +723,16 @@ function App() {
   // The stats page. A selected title still wins over it, so opening one from
   // the stats and coming back lands on the stats again.
   const [showStats, setShowStats] = useState(false)
+  const [showAdmin, setShowAdmin] = useState(false)
   // Both filters are multi-select; an empty set means "no filter".
   const [categoryFilters, setCategoryFilters] = useState<ReadonlySet<string>>(
     new Set()
   )
   const [addedByFilters, setAddedByFilters] = useState<ReadonlySet<string>>(new Set())
   const [profiles, setProfiles] = useState<string[]>([])
+  // Whether `profiles` reflects the database yet: until it does, a username
+  // missing from it proves nothing (see `profileRemoved` below).
+  const [profilesLoaded, setProfilesLoaded] = useState(false)
   // media row id -> names of the profiles that have seen it
   const [seenBy, setSeenBy] = useState<Record<string, string[]>>({})
   const [seenPickerId, setSeenPickerId] = useState<string | null>(null)
@@ -692,6 +756,7 @@ function App() {
     }
   })
   const fetchingGenres = useRef<Set<string>>(new Set())
+  const lastVisit = useRef<{ name: string; at: number } | null>(null)
   const failedGenres = useRef<Set<string>>(new Set())
 
   useEffect(() => {
@@ -779,7 +844,9 @@ function App() {
     })
   }
 
-  useEffect(() => {
+  // Loads all three tables from scratch: once on start, and again after an
+  // admin operation, whose many writes are simpler to re-read than to replay.
+  function loadAll() {
     supabase
       .from('media')
       .select('*')
@@ -795,7 +862,10 @@ function App() {
       .select('name')
       .then(({ data, error }) => {
         if (error) setError(`Chargement des profils impossible : ${error.message}`)
-        else setProfiles(sortedProfiles(data.map((p) => p.name as string)))
+        else {
+          setProfiles(sortedProfiles(data.map((p) => p.name as string)))
+          setProfilesLoaded(true)
+        }
       })
 
     supabase
@@ -812,6 +882,10 @@ function App() {
         }
         setSeenBy(map)
       })
+  }
+
+  useEffect(() => {
+    loadAll()
 
     const channel = supabase
       .channel('media-changes')
@@ -821,6 +895,10 @@ function App() {
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             upsertMedia(payload.new as Media)
+          } else if (payload.eventType === 'DELETE') {
+            // A DELETE payload carries only the primary key.
+            const { id } = payload.old as { id: string }
+            setMedia((current) => current.filter((m) => m.id !== id))
           }
         }
       )
@@ -832,6 +910,16 @@ function App() {
           setProfiles((current) =>
             current.includes(name) ? current : sortedProfiles([...current, name])
           )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'profiles' },
+        (payload) => {
+          // Removed from the admin panel. If it is this device's profile,
+          // `profileRemoved` sends it back to the name prompt.
+          const { name } = payload.old as { name: string }
+          setProfiles((current) => current.filter((p) => p !== name))
         }
       )
       .on(
@@ -893,22 +981,23 @@ function App() {
     return () => clearTimeout(timer)
   }, [highlight])
 
-  // Register the current profile so it shows up in everyone's "seen by" picker.
+  // Stamp this profile's last connection for the admin panel. Waits for the
+  // profile list so a deleted profile (see `profileRemoved`) is never stamped.
   useEffect(() => {
-    if (!username) return
-    supabase
-      .from('profiles')
-      .upsert({ name: username }, { ignoreDuplicates: true })
-      .then(({ error }) => {
-        if (!error) {
-          setProfiles((current) =>
-            current.includes(username)
-              ? current
-              : sortedProfiles([...current, username])
-          )
-        }
-      })
-  }, [username])
+    if (!username || !profilesLoaded || !profiles.includes(username)) return
+    function visit() {
+      const previous = lastVisit.current
+      if (previous?.name === username && Date.now() - previous.at < VISIT_GAP_MS) return
+      lastVisit.current = { name: username, at: Date.now() }
+      recordVisit(username)
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') visit()
+    }
+    visit()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [username, profilesLoaded, profiles])
 
   async function saveSeen(item: Media, selected: string[]) {
     setSeenPickerId(null)
@@ -970,13 +1059,56 @@ function App() {
     return [{ name: item.category ?? 'Autre', color: categoryColor(item.category) }]
   }
 
+  // Register the profile only when a name is typed in, never on start-up:
+  // otherwise a profile deleted from the admin panel would quietly come back
+  // the next time its owner opened the app. Added to local state first, so
+  // `profileRemoved` never mistakes a brand-new name for a deleted one.
   function chooseUsername(name: string) {
     localStorage.setItem(USERNAME_STORAGE_KEY, name)
     setUsername(name)
+    setProfiles((current) =>
+      current.includes(name) ? current : sortedProfiles([...current, name])
+    )
+    supabase
+      .from('profiles')
+      .upsert({ name }, { ignoreDuplicates: true })
+      .then(({ error }) => {
+        if (error) setError(`Enregistrement du profil impossible : ${error.message}`)
+        // The visit effect may have run before the row existed.
+        else recordVisit(name)
+      })
   }
 
-  if (!username) {
-    return <NamePrompt onSubmit={chooseUsername} />
+  // After an admin operation: re-read everything, and if it touched this
+  // device's own profile, follow it (a merge) or let `profileRemoved` act.
+  function handleProfileChange(change: ProfileChange) {
+    if (change.name === username && change.mode === 'merge' && change.into) {
+      localStorage.setItem(USERNAME_STORAGE_KEY, change.into)
+      setUsername(change.into)
+    }
+    loadAll()
+    pushNotice(
+      change.mode === 'merge'
+        ? `« ${change.name} » fusionné dans « ${change.into} »`
+        : `Profil « ${change.name} » supprimé`
+    )
+  }
+
+  // This device's stored name no longer has a profile: it was deleted from the
+  // admin panel. Back to the name prompt rather than silently re-creating it.
+  const profileRemoved = profilesLoaded && !!username && !profiles.includes(username)
+
+  if (!username || profileRemoved) {
+    return (
+      <NamePrompt
+        notice={
+          profileRemoved
+            ? `Le profil « ${username} » a été supprimé. Choisis un prénom pour continuer.`
+            : undefined
+        }
+        onSubmit={chooseUsername}
+      />
+    )
   }
 
   // Reading the selected row from the list keeps the detail page in sync
@@ -1004,6 +1136,22 @@ function App() {
           item={selectedItem}
           seenBy={seenBy[selectedItem.id] ?? []}
           onBack={() => setSelectedId(null)}
+        />
+      </>
+    )
+  }
+
+  if (showAdmin) {
+    return (
+      <>
+        {noticeStack}
+        <AdminView
+          media={media}
+          seenBy={seenBy}
+          profiles={profiles}
+          username={username}
+          onBack={() => setShowAdmin(false)}
+          onChanged={handleProfileChange}
         />
       </>
     )
@@ -1112,137 +1260,171 @@ function App() {
       ? categoryGroups.get(displayedCategories[0])?.[0]?.id
       : undefined
 
+  // "47 films à voir", "1 série vue": French agreement for the hero headline.
+  const headlineCount = filteredMedia.length
+  const many = headlineCount > 1
+  const typeNoun =
+    mediaTypeTab === 'tv' ? (many ? 'séries' : 'série') : many ? 'films' : 'film'
+  const headlineNoun =
+    tab === 'toWatch'
+      ? `${typeNoun} à voir`
+      : `${typeNoun} ${mediaTypeTab === 'tv' ? 'vue' : 'vu'}${many ? 's' : ''}`
+  const headlineSub =
+    tab === 'toWatch'
+      ? `${seenCount} déjà ${seenCount > 1 ? 'vus' : 'vu'} sur ${typeMedia.length}`
+      : `${toWatchCount} encore à voir sur ${typeMedia.length}`
+
   return (
-    <div className="app">
+    <div className="list-page">
       {noticeStack}
-      <header>
-        <h1>👁️ Iris</h1>
-        <div className="header-controls">
-          <button
-            className="stats-entry"
-            onClick={() => {
-              window.scrollTo(0, 0)
-              setShowStats(true)
-            }}
-            title="Voir les statistiques"
-          >
-            📊 Stats
-          </button>
-          <button
-            className="username"
-            onClick={() => setUsername('')}
-            title="Changer de prénom"
-          >
-            {username}
-          </button>
-        </div>
-      </header>
+      <ListHero
+        posters={posterWall(typeMedia)}
+        count={headlineCount}
+        noun={headlineNoun}
+        sub={headlineSub}
+        top={
+          <div className="list-topbar">
+          <span className="list-brand">👁️ Iris</span>
+          <div className="list-actions">
+            <button
+              className="cine-pill"
+              onClick={() => {
+                window.scrollTo(0, 0)
+                setShowStats(true)
+              }}
+              title="Voir les statistiques"
+            >
+              📊 Stats
+            </button>
+            <button
+              className="cine-pill is-accent"
+              onClick={() => setUsername('')}
+              title="Changer de prénom"
+            >
+              {username}
+            </button>
+          </div>
+          </div>
+        }
+      >
+        <AddMediaForm
+          username={username}
+          media={media}
+          isSeen={seenByMe}
+          onAdded={handleAdded}
+          onReveal={revealItem}
+          onError={setError}
+        />
 
-      {error && (
-        <div className="error-banner" onClick={() => setError('')}>
-          {error} <span className="error-dismiss">(cliquer pour fermer)</span>
-        </div>
-      )}
+        <Segmented
+          options={[
+            {
+              value: 'movie',
+              label: `${MEDIA_TYPE_ICON.movie} ${MEDIA_TYPE_PLURAL.movie}`,
+              count: movieCount,
+            },
+            {
+              value: 'tv',
+              label: `${MEDIA_TYPE_ICON.tv} ${MEDIA_TYPE_PLURAL.tv}`,
+              count: seriesCount,
+            },
+          ]}
+          value={mediaTypeTab}
+          onChange={setMediaTypeTab}
+        />
+      </ListHero>
 
-      <AddMediaForm
-        username={username}
-        media={media}
-        isSeen={seenByMe}
-        onAdded={handleAdded}
-        onReveal={revealItem}
-        onError={setError}
-      />
+      <div className="list-body">
+        {error && (
+          <div className="error-banner" onClick={() => setError('')}>
+            {error} <span className="error-dismiss">(cliquer pour fermer)</span>
+          </div>
+        )}
 
-      <nav className="switch media-switch">
-        <button
-          className={mediaTypeTab === 'movie' ? 'active' : undefined}
-          onClick={() => setMediaTypeTab('movie')}
-        >
-          {MEDIA_TYPE_ICON.movie} {MEDIA_TYPE_PLURAL.movie}
-          <span className="pill-count">{movieCount}</span>
-        </button>
-        <button
-          className={mediaTypeTab === 'tv' ? 'active' : undefined}
-          onClick={() => setMediaTypeTab('tv')}
-        >
-          {MEDIA_TYPE_ICON.tv} {MEDIA_TYPE_PLURAL.tv}
-          <span className="pill-count">{seriesCount}</span>
-        </button>
-      </nav>
-
-      {/* One row: the status toggle and both filters, all scoped to the list
-          chosen above. Wraps to a second line on narrow screens. */}
-      <div className="control-row">
-        <nav className="switch seen-switch">
-          <button
-            className={tab === 'toWatch' ? 'active' : undefined}
-            onClick={() => {
-              setTab('toWatch')
+        {/* One row: the status toggle and both filters, all scoped to the list
+            chosen above. Wraps to a second line on narrow screens. */}
+        <div className="control-row">
+          <Segmented
+            surface
+            options={[
+              { value: 'toWatch', label: 'À voir', count: toWatchCount },
+              { value: 'seen', label: 'Vus', count: seenCount },
+            ]}
+            value={tab}
+            onChange={(next) => {
+              setTab(next)
               setCategoryFilters(new Set())
             }}
-          >
-            À voir <span className="pill-count">{toWatchCount}</span>
-          </button>
-          <button
-            className={tab === 'seen' ? 'active' : undefined}
-            onClick={() => {
-              setTab('seen')
-              setCategoryFilters(new Set())
-            }}
-          >
-            Vus <span className="pill-count">{seenCount}</span>
-          </button>
-        </nav>
-
-        {categoryOptions.length > 1 && (
-          <FilterSelect
-            label="Thèmes"
-            options={categoryOptions}
-            selected={categoryFilters}
-            onChange={setCategoryFilters}
           />
-        )}
-        {adderOptions.length > 1 && (
-          <FilterSelect
-            label="Ajouté par"
-            options={adderOptions}
-            selected={addedByFilters}
-            onChange={setAddedByFilters}
-          />
-        )}
-      </div>
 
-      {loading ? (
-        <p className="empty-state">Chargement…</p>
-      ) : filteredMedia.length === 0 ? (
-        <p className="empty-state">
-          {activeAdders.length > 0
-            ? `Rien d'ajouté par ${activeAdders.join(', ')} dans cette liste.`
-            : tab === 'toWatch'
-              ? MEDIA_EMPTY_TO_WATCH[mediaTypeTab]
-              : MEDIA_EMPTY_SEEN[mediaTypeTab]}
-        </p>
-      ) : (
-        displayedCategories.map((category) => (
-          <section key={category} className="category-section">
-            <h2 className="category-title">{category}</h2>
-            <ul className="media-list">
-              {categoryGroups.get(category)!.map((item) => (
-                <MediaCard
-                  key={item.id}
-                  item={item}
-                  seen={seenByMe(item)}
-                  themes={itemThemes(item)}
-                  hint={item.id === hintItemId}
-                  highlight={item.id === highlight?.id}
-                  onSeen={(m) => setSeenPickerId(m.id)}
-                  onOpen={(m) => setSelectedId(m.id)}
+          {categoryOptions.length > 1 && (
+            <FilterSelect
+              label="Thèmes"
+              options={categoryOptions}
+              selected={categoryFilters}
+              onChange={setCategoryFilters}
+            />
+          )}
+          {adderOptions.length > 1 && (
+            <FilterSelect
+              label="Ajouté par"
+              options={adderOptions}
+              selected={addedByFilters}
+              onChange={setAddedByFilters}
+            />
+          )}
+        </div>
+
+        {loading ? (
+          <p className="empty-state">Chargement…</p>
+        ) : filteredMedia.length === 0 ? (
+          <p className="empty-state">
+            {activeAdders.length > 0
+              ? `Rien d'ajouté par ${activeAdders.join(', ')} dans cette liste.`
+              : tab === 'toWatch'
+                ? MEDIA_EMPTY_TO_WATCH[mediaTypeTab]
+                : MEDIA_EMPTY_SEEN[mediaTypeTab]}
+          </p>
+        ) : (
+          displayedCategories.map((category) => (
+            <Reveal key={category} className="category-section">
+              <h2 className="category-title">
+                <span
+                  className="category-dot"
+                  style={{ background: categoryColor(category === 'Autre' ? null : category) }}
                 />
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
+                {category}
+                <span className="category-count">{categoryGroups.get(category)!.length}</span>
+              </h2>
+              <ul className="media-list">
+                {categoryGroups.get(category)!.map((item, index) => (
+                  <MediaCard
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    seen={seenByMe(item)}
+                    themes={itemThemes(item)}
+                    hint={item.id === hintItemId}
+                    highlight={item.id === highlight?.id}
+                    onSeen={(m) => setSeenPickerId(m.id)}
+                    onOpen={(m) => setSelectedId(m.id)}
+                  />
+                ))}
+              </ul>
+            </Reveal>
+          ))
+        )}
+
+        <button
+          className="adm-entry"
+          onClick={() => {
+            window.scrollTo(0, 0)
+            setShowAdmin(true)
+          }}
+        >
+          ⚙️ Administration
+        </button>
+      </div>
 
       {pickerItem && (
         <SeenPicker

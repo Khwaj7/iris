@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode, RefObject } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { Media } from './lib/supabase'
 import type { MediaType } from './lib/media'
 import { MEDIA_TYPE_ICON, MEDIA_TYPE_PLURAL } from './lib/media'
 import { computeStats } from './lib/stats'
 import type { Bucket, GenreStat, PersonStat } from './lib/stats'
+import { Avatar, CinemaHero, Counter, Reveal, Segmented } from './cinema'
+import { posterWall, reducedMotion, useInView } from './motion'
+import type { SegmentOption } from './cinema'
 import './StatsView.css'
 
 type Scope = 'all' | MediaType
@@ -19,91 +22,6 @@ const percent = (share: number) => `${Math.round(share * 100)} %`
 
 const plural = (n: number, one: string, many: string) =>
   `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`
-
-const reducedMotion = () =>
-  typeof window !== 'undefined' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-// ---- Animation hooks ----
-
-// True once the element has scrolled into view, and stays true: every reveal
-// animation plays once. Without IntersectionObserver, or with reduced motion,
-// everything is simply visible from the start.
-function useInView<T extends Element>(): [RefObject<T | null>, boolean] {
-  const ref = useRef<T>(null)
-  const [visible, setVisible] = useState(
-    () => typeof IntersectionObserver === 'undefined' || reducedMotion()
-  )
-  useEffect(() => {
-    if (visible || !ref.current) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.15 }
-    )
-    observer.observe(ref.current)
-    return () => observer.disconnect()
-  }, [visible])
-  return [ref, visible]
-}
-
-// Counts up to `target` once `active`, easing out. A later change of target
-// (switching Films / Séries) animates from the number currently shown.
-function useCountUp(target: number, active: boolean, duration = 1100) {
-  const [value, setValue] = useState(0)
-  const shown = useRef(0)
-  const still = reducedMotion()
-  useEffect(() => {
-    if (!active || still) return
-    const from = shown.current
-    const start = performance.now()
-    let frame = 0
-    const tick = (now: number) => {
-      // A frame's timestamp can predate `start` by a hair; clamp so the first
-      // frame never eases to a negative number ("-0").
-      const t = Math.min(1, Math.max(0, (now - start) / duration))
-      const next = Math.round(from + (target - from) * (1 - Math.pow(1 - t, 3)))
-      shown.current = next
-      setValue(next)
-      if (t < 1) frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [target, active, duration, still])
-  // Reduced motion: no counting, just the number.
-  return still ? target : value
-}
-
-// ---- Building blocks ----
-
-// A block that fades and slides up when it enters the viewport. Children
-// (bars, columns) key their own grow-in off the parent's .is-visible class.
-function Reveal({
-  as: Tag = 'section',
-  className = '',
-  delay = 0,
-  children,
-}: {
-  as?: 'section' | 'div'
-  className?: string
-  delay?: number
-  children: ReactNode
-}) {
-  const [ref, visible] = useInView<HTMLElement>()
-  return (
-    <Tag
-      ref={ref as RefObject<HTMLElement & HTMLDivElement>}
-      className={`reveal ${visible ? 'is-visible' : ''} ${className}`}
-      style={{ '--delay': `${delay}ms` } as CSSProperties}
-    >
-      {children}
-    </Tag>
-  )
-}
 
 function Card({
   title,
@@ -127,10 +45,6 @@ function Card({
       {children}
     </Reveal>
   )
-}
-
-function Counter({ value, active }: { value: number; active: boolean }) {
-  return <>{useCountUp(value, active).toLocaleString('fr-FR')}</>
 }
 
 // Progress ring around a headline number; the arc draws itself on reveal.
@@ -183,17 +97,6 @@ function Legend() {
         </li>
       ))}
     </ul>
-  )
-}
-
-function Avatar({ name }: { name: string }) {
-  // A stable hue per name, so each person keeps their colour everywhere.
-  let hash = 0
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) % 360
-  return (
-    <span className="sv-avatar" style={{ '--hue': hash } as CSSProperties} aria-hidden="true">
-      {name.charAt(0).toUpperCase()}
-    </span>
   )
 }
 
@@ -466,7 +369,7 @@ function Spotlight({
           <span className="sv-spot-poster sv-poster-fallback">{MEDIA_TYPE_ICON[item.media_type]}</span>
         )}
         <span className="sv-spot-text">
-          <span className="sv-eyebrow">{label}</span>
+          <span className="cine-eyebrow">{label}</span>
           <span className="sv-spot-title">{item.title}</span>
           <span className="sv-spot-detail">{detail(item)}</span>
         </span>
@@ -476,8 +379,6 @@ function Spotlight({
 }
 
 const addedOn = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-
-const HERO_POSTERS = 24
 
 export default function StatsView({
   media,
@@ -507,25 +408,17 @@ export default function StatsView({
   )
   // The hero wall: the latest posters, whatever the scope, so it doesn't
   // reshuffle on every filter change.
-  const wall = useMemo(
-    () =>
-      [...media]
-        .filter((m) => m.thumbnail_url)
-        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, HERO_POSTERS),
-    [media]
-  )
+  const wall = useMemo(() => posterWall(media), [media])
 
   const stacked = scope === 'all'
   const me = stats.people.find((p) => p.name === username)
   const share = (n: number) => (stats.total ? n / stats.total : 0)
 
-  const scopes: { value: Scope; label: string; count: number }[] = [
+  const scopes: SegmentOption<Scope>[] = [
     { value: 'all', label: 'Tout', count: media.length },
     { value: 'movie', label: `${MEDIA_TYPE_ICON.movie} Films`, count: media.filter((m) => m.media_type === 'movie').length },
     { value: 'tv', label: `${MEDIA_TYPE_ICON.tv} Séries`, count: media.filter((m) => m.media_type === 'tv').length },
   ]
-  const scopeIndex = scopes.findIndex((s) => s.value === scope)
 
   const adders = [...stats.people]
     .filter((p) => p.added > 0)
@@ -533,45 +426,21 @@ export default function StatsView({
 
   return (
     <div className="sv">
-      <div className="sv-hero" ref={heroRef}>
-        <div className="sv-hero-wall" aria-hidden="true">
-          {wall.map((m, i) => (
-            <img key={m.id} src={m.thumbnail_url!} alt="" style={{ '--i': i } as CSSProperties} />
-          ))}
-        </div>
-        <div className="sv-hero-shade" />
-        <div className="sv-hero-content">
-          <button className="sv-back" onClick={onBack}>
-            ← Retour à la liste
-          </button>
-          <span className="sv-eyebrow">📊 Statistiques</span>
-          <h1 className="sv-hero-title">
-            <Counter value={stats.total} active={heroVisible} />{' '}
-            <span>{stats.total > 1 ? 'titres' : 'titre'}</span>
-          </h1>
-          <p className="sv-hero-sub">
-            {plural(stats.byType.movie, 'film', 'films')} · {plural(stats.byType.tv, 'série', 'séries')}
-            {me && ` · tu en as vu ${percent(me.seenShare)}`}
-          </p>
-
-          <nav
-            className="sv-scope"
-            style={{ '--index': scopeIndex, '--count': scopes.length } as CSSProperties}
-          >
-            <span className="sv-scope-thumb" aria-hidden="true" />
-            {scopes.map((s) => (
-              <button
-                key={s.value}
-                className={scope === s.value ? 'active' : undefined}
-                onClick={() => setScope(s.value)}
-              >
-                {s.label}
-                <span className="sv-scope-count">{s.count}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
+      <CinemaHero posters={wall} heroRef={heroRef}>
+        <button className="cine-pill sv-back" onClick={onBack}>
+          ← Retour à la liste
+        </button>
+        <span className="cine-eyebrow">📊 Statistiques</span>
+        <h1 className="cine-hero-title">
+          <Counter value={stats.total} active={heroVisible} />{' '}
+          <span>{stats.total > 1 ? 'titres' : 'titre'}</span>
+        </h1>
+        <p className="cine-hero-sub">
+          {plural(stats.byType.movie, 'film', 'films')} · {plural(stats.byType.tv, 'série', 'séries')}
+          {me && ` · tu en as vu ${percent(me.seenShare)}`}
+        </p>
+        <Segmented options={scopes} value={scope} onChange={setScope} />
+      </CinemaHero>
 
       <div className="sv-body">
         {stats.total === 0 ? (
