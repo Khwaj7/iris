@@ -27,6 +27,7 @@ import MediaDetail from './MediaDetail'
 import StatsView from './StatsView'
 import AdminView from './AdminView'
 import type { ProfileChange } from './AdminView'
+import { recordVisit } from './lib/profiles'
 import { CinemaHero, Counter, Reveal, Segmented } from './cinema'
 import { posterWall, useInView } from './motion'
 import './App.css'
@@ -36,6 +37,9 @@ type Tab = 'toWatch' | 'seen'
 const USERNAME_STORAGE_KEY = 'iris-username'
 const GENRES_STORAGE_KEY = 'iris-genres-v2'
 const SWIPE_HINT_KEY = 'iris-swipe-hint-seen'
+// "Last connection" is stamped on opening the app, and again on coming back to
+// it once this long has passed — not on every tab switch.
+const VISIT_GAP_MS = 30 * 60 * 1000
 
 function NamePrompt({
   notice,
@@ -752,6 +756,7 @@ function App() {
     }
   })
   const fetchingGenres = useRef<Set<string>>(new Set())
+  const lastVisit = useRef<{ name: string; at: number } | null>(null)
   const failedGenres = useRef<Set<string>>(new Set())
 
   useEffect(() => {
@@ -976,6 +981,24 @@ function App() {
     return () => clearTimeout(timer)
   }, [highlight])
 
+  // Stamp this profile's last connection for the admin panel. Waits for the
+  // profile list so a deleted profile (see `profileRemoved`) is never stamped.
+  useEffect(() => {
+    if (!username || !profilesLoaded || !profiles.includes(username)) return
+    function visit() {
+      const previous = lastVisit.current
+      if (previous?.name === username && Date.now() - previous.at < VISIT_GAP_MS) return
+      lastVisit.current = { name: username, at: Date.now() }
+      recordVisit(username)
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') visit()
+    }
+    visit()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [username, profilesLoaded, profiles])
+
   async function saveSeen(item: Media, selected: string[]) {
     setSeenPickerId(null)
     const before = seenBy[item.id] ?? []
@@ -1051,6 +1074,8 @@ function App() {
       .upsert({ name }, { ignoreDuplicates: true })
       .then(({ error }) => {
         if (error) setError(`Enregistrement du profil impossible : ${error.message}`)
+        // The visit effect may have run before the row existed.
+        else recordVisit(name)
       })
   }
 

@@ -4,6 +4,7 @@ import type { Media } from './lib/supabase'
 import { supabase } from './lib/supabase'
 import { MEDIA_TYPE_ICON } from './lib/media'
 import { ADMIN_CODE, deleteProfile, mergeProfile } from './lib/admin'
+import { LAST_SEEN_SQL } from './lib/profiles'
 import type { RemovalMode } from './lib/admin'
 import { Avatar, CinemaHero, Counter, Reveal } from './cinema'
 import { posterWall, useInView } from './motion'
@@ -18,6 +19,8 @@ export type ProfileChange = { name: string; mode: RemovalMode; into?: string }
 type ProfileRow = {
   name: string
   createdAt: string | null
+  // Last time the app was opened under this name (profiles.last_seen_at).
+  lastSeen: string | null
   added: number
   seen: number
   // Another profile whose name differs only by case or accents: a likely
@@ -32,6 +35,22 @@ const since = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', 
 const shortDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' })
 
 const RECENT_LIMIT = 5
+
+const relative = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' })
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// "à l'instant", "il y a 12 minutes", "hier", "il y a 5 jours", then a date.
+function lastSeenLabel(iso: string, now: number) {
+  const elapsed = Math.max(0, now - new Date(iso).getTime())
+  const minutes = Math.round(elapsed / 60000)
+  if (minutes < 1) return 'à l’instant'
+  if (minutes < 60) return relative.format(-minutes, 'minute')
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return relative.format(-hours, 'hour')
+  const days = Math.round(elapsed / DAY_MS)
+  if (days < 30) return relative.format(-days, 'day')
+  return `le ${since.format(new Date(iso))}`
+}
 
 const plural = (n: number, one: string, many: string) =>
   `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`
@@ -311,25 +330,49 @@ export default function AdminView({
 }) {
   const [unlocked, setUnlocked] = useState(readUnlocked)
   const [managing, setManaging] = useState<string | null>(null)
-  const [createdAt, setCreatedAt] = useState<Record<string, string>>({})
+  const [details, setDetails] = useState<
+    Record<string, { createdAt: string | null; lastSeen: string | null }>
+  >({})
+  // False until the dashboard has the last_seen_at column (see LAST_SEEN_SQL).
+  const [hasLastSeen, setHasLastSeen] = useState(true)
+  const [now, setNow] = useState(() => Date.now())
   const [heroRef, heroVisible] = useInView<HTMLDivElement>()
 
-  // Sign-up dates are only needed here, so they're fetched here rather than
-  // kept in App with the rest.
+  // Sign-up and last-connection dates are only needed here, so they're
+  // fetched here rather than kept in App with the rest. `*` rather than named
+  // columns, so this still works before last_seen_at exists.
   useEffect(() => {
     if (!unlocked) return
     let cancelled = false
     supabase
       .from('profiles')
-      .select('name, created_at')
+      .select('*')
       .then(({ data }) => {
         if (cancelled || !data) return
-        setCreatedAt(Object.fromEntries(data.map((p) => [p.name as string, p.created_at as string])))
+        setHasLastSeen(data.length === 0 || 'last_seen_at' in data[0])
+        setNow(Date.now())
+        setDetails(
+          Object.fromEntries(
+            data.map((p) => [
+              p.name as string,
+              {
+                createdAt: (p.created_at as string | null) ?? null,
+                lastSeen: (p.last_seen_at as string | null | undefined) ?? null,
+              },
+            ])
+          )
+        )
       })
     return () => {
       cancelled = true
     }
   }, [unlocked, profiles])
+
+  // Keep "il y a 3 minutes" current while the panel stays open.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(timer)
+  }, [])
 
   const rows = useMemo<ProfileRow[]>(() => {
     const seenCounts = new Map<string, number>()
@@ -345,13 +388,14 @@ export default function AdminView({
       const twin = main === name ? null : main
       return {
         name,
-        createdAt: createdAt[name] ?? null,
+        createdAt: details[name]?.createdAt ?? null,
+        lastSeen: details[name]?.lastSeen ?? null,
         added: media.filter((m) => m.added_by === name).length,
         seen: seenCounts.get(name) ?? 0,
         twin,
       }
     })
-  }, [profiles, media, seenBy, createdAt])
+  }, [profiles, media, seenBy, details])
 
   const duplicates = rows.filter((r) => r.twin).length
   const managed = rows.find((r) => r.name === managing)
@@ -405,6 +449,16 @@ export default function AdminView({
 
       {unlocked && (
         <div className="adm-body">
+          {!hasLastSeen && (
+            <div className="adm-setup">
+              <strong>Dernière connexion : une étape dans Supabase</strong>
+              <p>
+                Pour enregistrer la dernière connexion de chaque compte, exécute une fois cette
+                ligne dans le dashboard Supabase (SQL Editor) :
+              </p>
+              <code>{LAST_SEEN_SQL}</code>
+            </div>
+          )}
           <ul className="adm-list">
             {rows.map((row, i) => (
               <li key={row.name} style={{ '--i': Math.min(i, 10) } as CSSProperties}>
@@ -420,6 +474,20 @@ export default function AdminView({
                       {plural(row.added, 'ajout', 'ajouts')} · {plural(row.seen, 'vu', 'vus')}
                       {row.createdAt && ` · depuis le ${since.format(new Date(row.createdAt))}`}
                     </span>
+                    {hasLastSeen && (
+                      <span
+                        className={
+                          row.lastSeen && now - new Date(row.lastSeen).getTime() < DAY_MS
+                            ? 'adm-card-last is-recent'
+                            : 'adm-card-last'
+                        }
+                      >
+                        <span className="adm-last-dot" aria-hidden="true" />
+                        {row.lastSeen
+                          ? `Dernière connexion ${lastSeenLabel(row.lastSeen, now)}`
+                          : 'Pas encore de connexion enregistrée'}
+                      </span>
+                    )}
                   </div>
                   <button className="adm-manage" onClick={() => setManaging(row.name)}>
                     Gérer

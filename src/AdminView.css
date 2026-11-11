@@ -170,6 +170,60 @@
   font-size: 0.82rem;
 }
 
+/* Last connection; the dot turns green within the last 24 hours. */
+.adm-card-last {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.adm-last-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.adm-card-last.is-recent .adm-last-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}
+
+/* One-time setup note while the last_seen_at column is missing. */
+.adm-setup {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.adm-setup strong {
+  color: var(--text-h);
+}
+
+.adm-setup p {
+  margin: 0.3rem 0 0.5rem;
+}
+
+.adm-setup code {
+  display: block;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-h);
+  font-size: 0.8rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  user-select: all;
+}
+
 .adm-chip {
   padding: 0.05rem 0.45rem;
   border-radius: 999px;
