@@ -41,6 +41,7 @@ Iris is a shared watchlist of films **and series** ("À voir" / "Vus") backed by
 
 ## Conventions
 
+- **Every user-visible change gets a changelog entry** in `src/changelog.ts` (shown by the version badge), in the same change as the feature — not as an afterthought. Newest first, in French, one short line per change; a new feature set gets a new major version with a short title, and `APP_VERSION` must match `CHANGELOG[0].version`.
 - **UI language is French** — all user-facing strings are in French. Match this when adding UI.
 - Search inputs are debounced (300 ms) with a `cancelled` flag to drop stale/out-of-order responses; reuse this pattern (see `AddMediaForm`) for any new async-on-input feature.
 - The genre-id cache in `localStorage` is keyed by Supabase row id and **never invalidated**, so a wrong write persists per device — bump `GENRES_STORAGE_KEY` whenever the resolution logic changes.
