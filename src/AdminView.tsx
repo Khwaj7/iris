@@ -82,11 +82,15 @@ function Lock({ onUnlock }: { onUnlock: () => void }) {
   }
 
   if (!ADMIN_CODE) {
-    return (
+    // Setup instructions only for the developer running it locally; visitors
+    // of a deployed build just learn that the panel is off there.
+    return import.meta.env.DEV ? (
       <p className="adm-lock-note">
         Aucun code admin n'est défini. Ajoute <code>VITE_ADMIN_CODE=…</code> dans{' '}
         <code>.env.local</code>, puis relance le serveur.
       </p>
+    ) : (
+      <p className="adm-lock-note">Le panel admin n'est pas configuré sur ce déploiement.</p>
     )
   }
 
