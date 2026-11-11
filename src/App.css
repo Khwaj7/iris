@@ -25,97 +25,6 @@ h1 {
   margin-top: 1rem;
 }
 
-/* ---- Header ---- */
-
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-/* ---- Switches ----
-   One shape language for both top-level switches: separate rounded buttons,
-   outlined when idle, accent-filled when selected, each with a count badge.
-   They differ only in scale, which is what carries the hierarchy —
-   .media-switch (films / séries) is primary and fills the width;
-   .seen-switch (à voir / vus) is the same family one step down and hugs its
-   content, because it only applies within the list chosen above it. */
-.switch {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
-}
-
-.switch button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  color: var(--text-muted);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.switch button.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-/* Muted on an idle button; solid on the selected one, where the pill's usual
-   accent-soft background would vanish into the button's own. */
-.switch .pill-count {
-  background: none;
-  color: var(--text-muted);
-  padding: 0;
-  margin-left: 0;
-  font-size: 0.85rem;
-}
-
-.switch button.active .pill-count {
-  background: var(--accent);
-  color: var(--card-bg);
-  padding: 0 0.4rem;
-}
-
-/* Primary: the two lists. */
-.media-switch button {
-  flex: 1;
-  padding: 0.7rem 0.9rem;
-  font-size: 1rem;
-}
-
-/* Secondary: status within the selected list. */
-.seen-switch {
-  width: fit-content;
-}
-
-.seen-switch button {
-  padding: 0.45rem 0.85rem;
-  font-size: 0.9rem;
-}
-
-.username {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: none;
-  border-radius: 999px;
-  padding: 0.35rem 0.9rem;
-  font-weight: 600;
-}
-
 /* ---- Error banner ---- */
 
 .error-banner {
@@ -305,12 +214,6 @@ input:focus {
   margin-bottom: 1.25rem;
 }
 
-/* .switch carries a bottom margin for when it stands alone; inside the row the
-   row's own gap and margin do that job. */
-.control-row .seen-switch {
-  margin-bottom: 0;
-}
-
 .filter-select {
   position: relative;
 }
@@ -319,12 +222,18 @@ input:focus {
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
-  padding: 0.45rem 0.8rem;
+  /* Same height and corners as the À voir / Vus switch beside it. */
+  padding: 0.75rem 0.9rem;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
+  transition: border-color 0.2s;
   color: var(--text-h);
   font-size: 0.9rem;
+}
+
+.filter-trigger:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
 
 .filter-trigger.is-active {
@@ -465,34 +374,187 @@ input:focus {
   font-weight: 600;
 }
 
+/* ---- List page ----
+   Same cinema look as the stats page (cinema.css): a poster-wall hero holding
+   the brand, the headline count, the search and the films / séries switch,
+   then the list body below. */
+
+.list-page {
+  min-height: 100vh;
+  overflow-x: clip;
+}
+
+/* Above the body, so the search dropdown opened inside it covers the list. */
+.list-page .cine-hero {
+  z-index: 2;
+}
+
+.list-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 2.25rem;
+  /* Clear the fixed version badge in the top-right corner: room for it,
+     minus whatever margin the centred content already leaves on the right. */
+  padding-right: max(0px, calc(3.5rem - max(0px, (100vw - 960px) / 2)));
+}
+
+.list-brand {
+  color: #fff;
+  white-space: nowrap;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.list-actions {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.list-actions .cine-pill {
+  white-space: nowrap;
+}
+
+.list-actions .cine-pill:last-child {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-hero-title {
+  font-size: clamp(2.4rem, 8vw, 4rem);
+}
+
+.list-body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
+
+/* The search, frosted over the hero; its results drop over the list. */
+.cine-hero .add-form {
+  position: relative;
+  max-width: 560px;
+  margin-bottom: 1rem;
+}
+
+.cine-hero .add-title {
+  padding: 0.8rem 2.6rem 0.8rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.cine-hero .add-title::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cine-hero .add-title:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 3px rgba(170, 59, 255, 0.35);
+}
+
+.cine-hero .add-clear {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cine-hero .add-clear:hover {
+  color: #fff;
+}
+
+.cine-hero .search-status {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.cine-hero .search-results {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  margin: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  animation: results-in 0.25s var(--cine-ease);
+}
+
+@keyframes results-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
 /* ---- Media list ---- */
 
+/* One column on a phone, two from tablet width up. */
 .media-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.7rem;
+}
+
+@media (min-width: 760px) {
+  .media-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .category-section {
-  margin-bottom: 1.25rem;
+  margin-bottom: 2rem;
 }
 
 .category-title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.75rem;
+  color: var(--text-h);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
+.category-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Cards fade in one after another once their section is revealed. */
 .media-card-wrap {
   position: relative;
-  border-radius: 10px;
+  border-radius: 16px;
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.5s var(--cine-ease) calc(var(--i, 0) * 60ms + 150ms);
+}
+
+.category-section.is-visible .media-card-wrap {
+  opacity: 1;
 }
 
 /* Green "seen" action revealed under the card during a right-to-left swipe. */
@@ -511,15 +573,61 @@ input:focus {
 
 .media-card {
   position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.9rem;
+  height: 100%;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.6rem 0.8rem;
+  border-radius: 16px;
+  padding: 0.7rem 0.9rem;
   /* Let vertical scroll pass through; horizontal drag is handled in JS. */
   touch-action: pan-y;
+}
+
+/* The card's own poster, blurred into a faint ambient tint. */
+.media-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--poster) center / cover no-repeat;
+  filter: blur(28px) saturate(1.5);
+  opacity: 0.14;
+  transform: scale(1.5);
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .media-card::before {
+    opacity: 0.2;
+  }
+}
+
+@media (hover: hover) {
+  .media-card {
+    transition:
+      transform 0.3s var(--cine-ease),
+      border-color 0.3s,
+      box-shadow 0.3s;
+  }
+
+  .media-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+  }
+
+  .media-card:hover::before {
+    opacity: 0.3;
+  }
+
+  .media-card:hover .poster {
+    transform: scale(1.05) rotate(-1.5deg);
+  }
 }
 
 /* One-time demo: nudge the first card left to reveal the swipe action. */
@@ -568,6 +676,16 @@ input:focus {
     border-color: var(--accent);
     background: var(--accent-soft);
   }
+
+  .media-card-wrap {
+    opacity: 1;
+    transition: none;
+  }
+
+  .media-card,
+  .media-card .poster {
+    transition: none;
+  }
 }
 
 .media-open {
@@ -584,11 +702,13 @@ input:focus {
 }
 
 .poster {
-  width: 44px;
-  height: 66px;
+  width: 56px;
+  height: 84px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 10px;
   flex-shrink: 0;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 0.3s var(--cine-ease);
 }
 
 .poster-placeholder {
@@ -1122,20 +1242,4 @@ div.cast-photo {
 
 .changelog-changes li {
   margin-bottom: 0.2rem;
-}
-
-/* ---- Stats entry button (list header) ---- */
-
-.stats-entry {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.35rem 0.8rem;
-  color: var(--text-h);
-  font-weight: 600;
-}
-
-.stats-entry:hover {
-  border-color: var(--accent);
-  color: var(--accent);
 }

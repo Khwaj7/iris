@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent, TouchEvent } from 'react'
+import type { CSSProperties, FormEvent, ReactNode, TouchEvent } from 'react'
 import { supabase } from './lib/supabase'
 import type { Media } from './lib/supabase'
 import type { MediaType } from './lib/media'
@@ -25,6 +25,8 @@ import type { MediaSearchResult } from './lib/tmdb'
 import MediaBadge from './MediaBadge'
 import MediaDetail from './MediaDetail'
 import StatsView from './StatsView'
+import { CinemaHero, Counter, Reveal, Segmented } from './cinema'
+import { posterWall, useInView } from './motion'
 import './App.css'
 
 type Tab = 'toWatch' | 'seen'
@@ -378,6 +380,7 @@ const cardAnchorId = (mediaId: string) => `media-${mediaId}`
 
 function MediaCard({
   item,
+  index,
   seen,
   themes,
   hint,
@@ -386,6 +389,8 @@ function MediaCard({
   onOpen,
 }: {
   item: Media
+  // Position in its section, to stagger the entrance animation.
+  index: number
   seen: boolean
   themes: Theme[]
   hint?: boolean
@@ -426,10 +431,12 @@ function MediaCard({
     setDragX(0)
   }
 
-  const cardStyle: CSSProperties = {
+  const cardStyle = {
     transform: dragX ? `translateX(${dragX}px)` : undefined,
     transition: dragX ? 'none' : 'transform 0.2s ease',
-  }
+    // Blurred into a faint ambient tint behind the card (see .media-card::before).
+    '--poster': item.thumbnail_url ? `url("${item.thumbnail_url}")` : 'none',
+  } as CSSProperties
 
   const cardClass = ['media-card', hint && 'swipe-hint', highlight && 'is-highlighted']
     .filter(Boolean)
@@ -437,7 +444,11 @@ function MediaCard({
 
   return (
     // The id is the scroll anchor used when a search hit is already in the list.
-    <li className="media-card-wrap" id={cardAnchorId(item.id)}>
+    <li
+      className="media-card-wrap"
+      id={cardAnchorId(item.id)}
+      style={{ '--i': Math.min(index, 8) } as CSSProperties}
+    >
       <div className="swipe-reveal">{seenLabel(item)}</div>
       <div
         className={cardClass}
@@ -647,6 +658,41 @@ function FilterSelect({
     </div>
   )
 }
+
+// The list's header: the poster wall of the current list, the brand and
+// account buttons, a big count of what's in the current tab, the search and
+// the films / séries switch. Its own component so the count-up hook only
+// mounts with the list view.
+function ListHero({
+  posters,
+  count,
+  noun,
+  sub,
+  top,
+  children,
+}: {
+  posters: Media[]
+  count: number
+  noun: string
+  sub: string
+  // Above the headline (the top bar); children go below it.
+  top: ReactNode
+  children: ReactNode
+}) {
+  const [heroRef, heroVisible] = useInView<HTMLDivElement>()
+  return (
+    <CinemaHero posters={posters} heroRef={heroRef} width={LIST_WIDTH}>
+      {top}
+      <h1 className="cine-hero-title list-hero-title">
+        <Counter value={count} active={heroVisible} /> <span>{noun}</span>
+      </h1>
+      <p className="cine-hero-sub">{sub}</p>
+      {children}
+    </CinemaHero>
+  )
+}
+
+const LIST_WIDTH = '960px'
 
 function App() {
   const [username, setUsername] = useState(
@@ -1112,137 +1158,161 @@ function App() {
       ? categoryGroups.get(displayedCategories[0])?.[0]?.id
       : undefined
 
+  // "47 films à voir", "1 série vue": French agreement for the hero headline.
+  const headlineCount = filteredMedia.length
+  const many = headlineCount > 1
+  const typeNoun =
+    mediaTypeTab === 'tv' ? (many ? 'séries' : 'série') : many ? 'films' : 'film'
+  const headlineNoun =
+    tab === 'toWatch'
+      ? `${typeNoun} à voir`
+      : `${typeNoun} ${mediaTypeTab === 'tv' ? 'vue' : 'vu'}${many ? 's' : ''}`
+  const headlineSub =
+    tab === 'toWatch'
+      ? `${seenCount} déjà ${seenCount > 1 ? 'vus' : 'vu'} sur ${typeMedia.length}`
+      : `${toWatchCount} encore à voir sur ${typeMedia.length}`
+
   return (
-    <div className="app">
+    <div className="list-page">
       {noticeStack}
-      <header>
-        <h1>👁️ Iris</h1>
-        <div className="header-controls">
-          <button
-            className="stats-entry"
-            onClick={() => {
-              window.scrollTo(0, 0)
-              setShowStats(true)
-            }}
-            title="Voir les statistiques"
-          >
-            📊 Stats
-          </button>
-          <button
-            className="username"
-            onClick={() => setUsername('')}
-            title="Changer de prénom"
-          >
-            {username}
-          </button>
-        </div>
-      </header>
+      <ListHero
+        posters={posterWall(typeMedia)}
+        count={headlineCount}
+        noun={headlineNoun}
+        sub={headlineSub}
+        top={
+          <div className="list-topbar">
+          <span className="list-brand">👁️ Iris</span>
+          <div className="list-actions">
+            <button
+              className="cine-pill"
+              onClick={() => {
+                window.scrollTo(0, 0)
+                setShowStats(true)
+              }}
+              title="Voir les statistiques"
+            >
+              📊 Stats
+            </button>
+            <button
+              className="cine-pill is-accent"
+              onClick={() => setUsername('')}
+              title="Changer de prénom"
+            >
+              {username}
+            </button>
+          </div>
+          </div>
+        }
+      >
+        <AddMediaForm
+          username={username}
+          media={media}
+          isSeen={seenByMe}
+          onAdded={handleAdded}
+          onReveal={revealItem}
+          onError={setError}
+        />
 
-      {error && (
-        <div className="error-banner" onClick={() => setError('')}>
-          {error} <span className="error-dismiss">(cliquer pour fermer)</span>
-        </div>
-      )}
+        <Segmented
+          options={[
+            {
+              value: 'movie',
+              label: `${MEDIA_TYPE_ICON.movie} ${MEDIA_TYPE_PLURAL.movie}`,
+              count: movieCount,
+            },
+            {
+              value: 'tv',
+              label: `${MEDIA_TYPE_ICON.tv} ${MEDIA_TYPE_PLURAL.tv}`,
+              count: seriesCount,
+            },
+          ]}
+          value={mediaTypeTab}
+          onChange={setMediaTypeTab}
+        />
+      </ListHero>
 
-      <AddMediaForm
-        username={username}
-        media={media}
-        isSeen={seenByMe}
-        onAdded={handleAdded}
-        onReveal={revealItem}
-        onError={setError}
-      />
-
-      <nav className="switch media-switch">
-        <button
-          className={mediaTypeTab === 'movie' ? 'active' : undefined}
-          onClick={() => setMediaTypeTab('movie')}
-        >
-          {MEDIA_TYPE_ICON.movie} {MEDIA_TYPE_PLURAL.movie}
-          <span className="pill-count">{movieCount}</span>
-        </button>
-        <button
-          className={mediaTypeTab === 'tv' ? 'active' : undefined}
-          onClick={() => setMediaTypeTab('tv')}
-        >
-          {MEDIA_TYPE_ICON.tv} {MEDIA_TYPE_PLURAL.tv}
-          <span className="pill-count">{seriesCount}</span>
-        </button>
-      </nav>
-
-      {/* One row: the status toggle and both filters, all scoped to the list
-          chosen above. Wraps to a second line on narrow screens. */}
-      <div className="control-row">
-        <nav className="switch seen-switch">
-          <button
-            className={tab === 'toWatch' ? 'active' : undefined}
-            onClick={() => {
-              setTab('toWatch')
-              setCategoryFilters(new Set())
-            }}
-          >
-            À voir <span className="pill-count">{toWatchCount}</span>
-          </button>
-          <button
-            className={tab === 'seen' ? 'active' : undefined}
-            onClick={() => {
-              setTab('seen')
-              setCategoryFilters(new Set())
-            }}
-          >
-            Vus <span className="pill-count">{seenCount}</span>
-          </button>
-        </nav>
-
-        {categoryOptions.length > 1 && (
-          <FilterSelect
-            label="Thèmes"
-            options={categoryOptions}
-            selected={categoryFilters}
-            onChange={setCategoryFilters}
-          />
+      <div className="list-body">
+        {error && (
+          <div className="error-banner" onClick={() => setError('')}>
+            {error} <span className="error-dismiss">(cliquer pour fermer)</span>
+          </div>
         )}
-        {adderOptions.length > 1 && (
-          <FilterSelect
-            label="Ajouté par"
-            options={adderOptions}
-            selected={addedByFilters}
-            onChange={setAddedByFilters}
+
+        {/* One row: the status toggle and both filters, all scoped to the list
+            chosen above. Wraps to a second line on narrow screens. */}
+        <div className="control-row">
+          <Segmented
+            surface
+            options={[
+              { value: 'toWatch', label: 'À voir', count: toWatchCount },
+              { value: 'seen', label: 'Vus', count: seenCount },
+            ]}
+            value={tab}
+            onChange={(next) => {
+              setTab(next)
+              setCategoryFilters(new Set())
+            }}
           />
+
+          {categoryOptions.length > 1 && (
+            <FilterSelect
+              label="Thèmes"
+              options={categoryOptions}
+              selected={categoryFilters}
+              onChange={setCategoryFilters}
+            />
+          )}
+          {adderOptions.length > 1 && (
+            <FilterSelect
+              label="Ajouté par"
+              options={adderOptions}
+              selected={addedByFilters}
+              onChange={setAddedByFilters}
+            />
+          )}
+        </div>
+
+        {loading ? (
+          <p className="empty-state">Chargement…</p>
+        ) : filteredMedia.length === 0 ? (
+          <p className="empty-state">
+            {activeAdders.length > 0
+              ? `Rien d'ajouté par ${activeAdders.join(', ')} dans cette liste.`
+              : tab === 'toWatch'
+                ? MEDIA_EMPTY_TO_WATCH[mediaTypeTab]
+                : MEDIA_EMPTY_SEEN[mediaTypeTab]}
+          </p>
+        ) : (
+          displayedCategories.map((category) => (
+            <Reveal key={category} className="category-section">
+              <h2 className="category-title">
+                <span
+                  className="category-dot"
+                  style={{ background: categoryColor(category === 'Autre' ? null : category) }}
+                />
+                {category}
+                <span className="category-count">{categoryGroups.get(category)!.length}</span>
+              </h2>
+              <ul className="media-list">
+                {categoryGroups.get(category)!.map((item, index) => (
+                  <MediaCard
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    seen={seenByMe(item)}
+                    themes={itemThemes(item)}
+                    hint={item.id === hintItemId}
+                    highlight={item.id === highlight?.id}
+                    onSeen={(m) => setSeenPickerId(m.id)}
+                    onOpen={(m) => setSelectedId(m.id)}
+                  />
+                ))}
+              </ul>
+            </Reveal>
+          ))
         )}
       </div>
-
-      {loading ? (
-        <p className="empty-state">Chargement…</p>
-      ) : filteredMedia.length === 0 ? (
-        <p className="empty-state">
-          {activeAdders.length > 0
-            ? `Rien d'ajouté par ${activeAdders.join(', ')} dans cette liste.`
-            : tab === 'toWatch'
-              ? MEDIA_EMPTY_TO_WATCH[mediaTypeTab]
-              : MEDIA_EMPTY_SEEN[mediaTypeTab]}
-        </p>
-      ) : (
-        displayedCategories.map((category) => (
-          <section key={category} className="category-section">
-            <h2 className="category-title">{category}</h2>
-            <ul className="media-list">
-              {categoryGroups.get(category)!.map((item) => (
-                <MediaCard
-                  key={item.id}
-                  item={item}
-                  seen={seenByMe(item)}
-                  themes={itemThemes(item)}
-                  hint={item.id === hintItemId}
-                  highlight={item.id === highlight?.id}
-                  onSeen={(m) => setSeenPickerId(m.id)}
-                  onOpen={(m) => setSelectedId(m.id)}
-                />
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
 
       {pickerItem && (
         <SeenPicker
