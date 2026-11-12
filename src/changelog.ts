@@ -22,6 +22,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Cartes sur deux colonnes sur ordinateur, avec une affiche plus grande',
       'Panel ⚙️ Administration (avec code) : fusionner les doublons ou supprimer un profil',
       'Dernière connexion de chaque profil, visible dans le panel admin',
+      'Fiches profil détaillées dans le panel admin : films / séries, % vus, genre préféré, derniers vus et ajouts, goûts proches',
       'Un profil supprimé revient à l’écran prénom au prochain lancement',
     ],
   },
